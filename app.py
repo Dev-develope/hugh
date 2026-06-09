@@ -1,3 +1,4 @@
+import base64
 import openai
 import os
 import requests
@@ -17,6 +18,16 @@ ELEVENLABS_VOICE_SIMILARITY = 0.75
 # Choose your favorite ElevenLabs voice
 ELEVENLABS_VOICE_NAME = "Hugh"
 ELEVENLABS_ALL_VOICES = []
+
+# Add your 60db API key (optional — only used when TTS_PROVIDER='sixtydb')
+SIXTYDB_API_KEY = ""
+SIXTYDB_VOICE_ID = "fbb75ed2-975a-40c7-9e06-38e30524a9a1"  # 60db docs default
+SIXTYDB_VOICE_SPEED = 1.0
+SIXTYDB_VOICE_STABILITY = 50      # 60db scale is 0-100 (not 0-1 like ElevenLabs)
+SIXTYDB_VOICE_SIMILARITY = 75
+
+# Pick which TTS service /ask uses: 'elevenlabs' (default) or 'sixtydb'.
+TTS_PROVIDER = "elevenlabs"
 
 app = Flask(__name__)
 
@@ -100,6 +111,41 @@ def generate_audio(text: str, output_path: str = "") -> str:
     return output_path
 
 
+def generate_audio_sixtydb(text: str, output_path: str = "") -> str:
+    """Convert text to mp3 via 60db's REST TTS endpoint.
+
+    Mirrors generate_audio() shape so /ask can dispatch between providers
+    without other code changes. Writes a mp3 file to output_path.
+
+    Docs: https://docs.60db.ai/api-reference/tts/text-to-speech
+
+    :param text: The text to convert to audio.
+    :param output_path: The location to save the finished mp3 file.
+    :returns: The output path for the successfully saved file.
+    :rtype: str
+    """
+    url = "https://api.60db.ai/tts-synthesize"
+    headers = {
+        "Authorization": f"Bearer {SIXTYDB_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "text": text,
+        "voice_id": SIXTYDB_VOICE_ID,
+        "output_format": "mp3",
+        "enhance": True,
+        "speed": SIXTYDB_VOICE_SPEED,
+        "stability": SIXTYDB_VOICE_STABILITY,
+        "similarity": SIXTYDB_VOICE_SIMILARITY,
+    }
+    response = requests.post(url, json=data, headers=headers)
+    # 60db returns JSON { audio_base64, sample_rate, ... }, not raw bytes
+    audio_bytes = base64.b64decode(response.json()["audio_base64"])
+    with open(output_path, "wb") as output:
+        output.write(audio_bytes)
+    return output_path
+
+
 @app.route('/')
 def index():
     """Render the index page."""
@@ -128,7 +174,11 @@ def ask():
     reply_file = f"{uuid.uuid4()}.mp3"
     reply_path = f"outputs/{reply_file}"
     os.makedirs(os.path.dirname(reply_path), exist_ok=True)
-    generate_audio(reply, output_path=reply_path)
+    # Dispatch to whichever TTS provider is active.
+    if TTS_PROVIDER == "sixtydb":
+        generate_audio_sixtydb(reply, output_path=reply_path)
+    else:
+        generate_audio(reply, output_path=reply_path)
     return jsonify({'text': reply, 'audio': f"/listen/{reply_file}"})
 
 

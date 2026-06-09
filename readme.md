@@ -12,6 +12,10 @@ Ask Hugh is a web application that allows you to record audio, transcribe it, an
 `OPENAI_API_KEY = "YOUR API KEY HERE"`.   
 `ELEVENLABS_API_KEY = "YOUR API KEY HERE"`
 
+   Optional: to use 60db instead of ElevenLabs, set both:    
+`SIXTYDB_API_KEY = "sk_live_..."`    
+`TTS_PROVIDER = "sixtydb"`
+
 ### Usage
 1. Start the Flask server: `python app.py` or `flask run`
 2. Open your web browser and navigate to http://localhost:5000.
